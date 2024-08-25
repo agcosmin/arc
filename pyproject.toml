@@ -29,6 +29,8 @@ dependencies = [
 "accelerate >= 0.31.0",
 "bitsandbytes >= 0.41.0",
 "tokenizers >= 0.19.1",
+"datasets >= 2.21.0",
+"tqdm >= 4.66.5",
 ]
 
 [project.urls]
@@ -37,6 +39,9 @@ dependencies = [
 name = "arc"
 
 [project.scripts]
+arc-train = "arc.train:main"
+arc-augment-dataset = "arc.generate_augmented_dataset:main"
+
 
 [project.optional-dependencies]
 dev = [

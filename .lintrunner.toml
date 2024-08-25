@@ -30,7 +30,7 @@ command = [
   "-m",
   "lintrunner_adapters",
   "run",
-  "ruff_lint",
+  "ruff_linter",
   "--config",
   "pyproject.toml",
   "--",
