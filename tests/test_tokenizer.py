@@ -109,6 +109,23 @@ def test_rle_problem_encoding_returns_expected_tokens():
     )
 
     tokens = tokenizer.encode(problem, add_special_tokens=True)
-    print(f"{tokens=}")
-    print(f"{expected_tokens=}")
     assert torch.all(tokens == expected_tokens)
+
+
+def test_decode_encoded_sequence():
+    example1 = torch.tensor([[0, 0, 1, 2, 2], [1, 1, 1, 0, 0], [0, 1, 2, 1, 2]])
+    solution1 = torch.tensor([[1, 1], [0, 2]])
+    example2 = torch.tensor([[1, 1, 1, 2, 2], [0, 0, 0, 0, 0], [1, 1, 2, 1, 2]])
+    solution2 = torch.tensor([[1, 2], [0, 2]])
+    sequence = [example1, solution1, example2, solution2]
+    tokenizer = arc.tokenizer.ARCTokenizer(max_run_length=3)
+
+    tokenized_sequence = tokenizer.encode(sequence, add_solution_prompt=True)
+    decoded_sequence = tokenizer.decode(tokenized_sequence)
+    for decoded, expected in zip(decoded_sequence, sequence):
+        assert torch.all(decoded == expected)
+
+    tokenized_sequence = tokenizer.encode(sequence, add_solution_prompt=False)
+    decoded_sequence = tokenizer.decode(tokenized_sequence)
+    for decoded, expected in zip(decoded_sequence, sequence):
+        assert torch.all(decoded == expected)

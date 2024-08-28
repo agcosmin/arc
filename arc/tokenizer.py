@@ -96,5 +96,44 @@ class ARCTokenizer:
         tokens = torch.hstack(tokens)
         return tokens
 
-    def decode(self, input: torch.Tensor) -> torch.Tensor:
-        pass
+    def decode(self, sequence: torch.Tensor) -> list[torch.Tensor]:
+        io_marks = (
+            torch.logical_or(
+                sequence == self.special_tokens["<in>"],
+                sequence == self.special_tokens["<out>"],
+            )
+            .nonzero()
+            .flatten()
+            .tolist()
+        )
+        rhs_mask = (sequence == self.special_tokens["<rhs>"]).tolist()
+        sequence = sequence - len(self.special_tokens)
+        values = torch.div(sequence, self.max_run_length, rounding_mode="trunc")
+        runs = torch.remainder(sequence, self.max_run_length) + 1
+
+        if not io_marks:
+            io_marks = [-1]
+        io_marks.append(len(sequence))
+        images = []
+        for begin, end in zip(io_marks[:-1], io_marks[1:]):
+            rows = []
+            row = []
+            for value, run, rhs in zip(
+                values[begin + 1 : end],
+                runs[begin + 1 : end],
+                rhs_mask[begin + 1 : end],
+            ):
+                if rhs:
+                    rows.append(torch.hstack(row))
+                    row = []
+                else:
+                    row.append(torch.full((run,), value))
+            if row:
+                rows.append(torch.hstack(row))
+            if rows:
+                num_columns = max(len(row) for row in rows)
+                img = torch.full((len(rows), num_columns), 0)
+                for i, row in enumerate(rows):
+                    img[i, 0 : len(row)] = row
+                images.append(img)
+        return images
