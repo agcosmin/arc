@@ -19,11 +19,7 @@ class ARCTokenizer:
 
     @torch.no_grad
     def _rle_tokenize(
-        self,
-        input: torch.Tensor,
-        max_run_length: int = -1,
-        add_rhs_token: bool = False,
-        remove_trailing_rhs_token: bool = True,
+        self, input: torch.Tensor, max_run_length: int = -1
     ) -> None:
         """Tokenize based on the run length of the values. All values must be >= 0.
 
@@ -36,9 +32,8 @@ class ARCTokenizer:
             input = torch.unsqueeze(input, 0)
 
         rhs_value = -1
-        if add_rhs_token:
-            rhs = torch.full((input.shape[0], 1, *input.shape[2:]), rhs_value)
-            input = torch.hstack((input, rhs))
+        rhs = torch.full((input.shape[0], 1, *input.shape[2:]), rhs_value)
+        input = torch.hstack((input, rhs))
 
         if max_run_length > 0:
             max_run_length = min(max_run_length, self.max_run_length)
@@ -65,11 +60,6 @@ class ARCTokenizer:
             values * self.max_run_length + (runs - 1) + len(self.special_tokens)
         )
         tokens[values == rhs_value] = self.special_tokens["<rhs>"]
-        if (
-            remove_trailing_rhs_token
-            and tokens[-1] == self.special_tokens["<rhs>"]
-        ):
-            tokens = tokens[:-1]
 
         return tokens
 
@@ -77,18 +67,16 @@ class ARCTokenizer:
         self,
         input: list[torch.Tensor],
         max_run_length: int = -1,
-        add_special_tokens: bool = True,
         add_solution_prompt: bool = True,
     ) -> torch.Tensor:
         tokens = []
-        in_token = torch.tensor([self.special_tokens["<in>"]])
-        out_token = torch.tensor([self.special_tokens["<out>"]])
+        io_tokens = (
+            torch.tensor([self.special_tokens["<in>"]]),
+            torch.tensor([self.special_tokens["<out>"]]),
+        )
         for i, tensor in enumerate(input):
-            if add_special_tokens:
-                tokens.append(out_token if i % 2 else in_token)
-            tokens.append(
-                self._rle_tokenize(tensor, max_run_length, add_special_tokens)
-            )
+            tokens.append(io_tokens[i % len(io_tokens)])
+            tokens.append(self._rle_tokenize(tensor, max_run_length))
 
         if add_solution_prompt:
             tokens.append(torch.tensor(self.special_tokens["<out>"]))
