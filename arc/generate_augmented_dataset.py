@@ -74,10 +74,11 @@ def main():
             len(samples) < args.num_samples
             and num_samples < args.max_num_samples
         ):
-            sample = dataset[i]
-            problem = sample["problem"]
-            for sequence in sample["tokenized_sequence"]:
+            for sample in dataset[i]:
+                sequence = sample["tokenized_sequence"]
                 samples[",".join(str(s) for s in sequence)] = sequence.tolist()
+                problem = sample["problem"]
+
         table = pyarrow.table(
             [[problem] * len(samples), list(samples.values())],
             names=["problem", "tokenized_sequence"],
