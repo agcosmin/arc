@@ -76,7 +76,6 @@ class ARCDataset(torch.utils.data.Dataset):
                 self.tokenizer.encode(
                     seq,
                     max_run_length=run_limit,
-                    add_special_tokens=True,
                     add_solution_prompt=not self.train,
                 )
                 for seq in sequences
