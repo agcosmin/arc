@@ -140,15 +140,15 @@ def main():
     )
     model = ARCEncoderLightning(arc.transformer.ARCEncoder(config))
     trainer = lightning.Trainer(
-        max_epochs=10,
-        # limit_train_batches=100,
+        max_epochs=15,
         callbacks=[create_checkpoint],
         default_root_dir=logs_path,
         accumulate_grad_batches=4,
         gradient_clip_val=1.0,
     )
     trainer.fit(model=model, train_dataloaders=train_dataloader)
-    trainer.test(model=model, ckpt_path="last", dataloaders=test_dataloader)
+    trainer.test(model=model, dataloaders=train_dataloader)
+    trainer.test(model=model, dataloaders=test_dataloader)
 
 
 if __name__ == "__main__":
