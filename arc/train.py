@@ -51,8 +51,8 @@ class ARCEncoderLightning(lightning.LightningModule):
         if problem_type_loss:
             loss += (1.0 - self.alpha) * problem_type_loss
             self.log("train_pt_loss", problem_type_loss, prog_bar=True)
-        self.log("train_lm_loss", lm_loss, prog_bar=True, on_epoch=True)
-        self.log("loss", loss, prog_bar=True, on_epoch=True)
+        self.log("train_lm_loss", lm_loss, prog_bar=True)
+        self.log("loss", loss, prog_bar=True)
         self.log("global_step", self.global_step)
 
         return loss
@@ -91,8 +91,8 @@ def main():
         num_token_ids=tokenizer.num_token_ids,
         embedding_dim=512,
         num_heads=8,
-        dim_feedforward=1024,
-        num_layers=6,
+        dim_feedforward=2048,
+        num_layers=4,
         tokenizer_max_run_length=tokenizer_max_run_length,
     )
     create_checkpoint = lightning.pytorch.callbacks.ModelCheckpoint(
@@ -117,7 +117,7 @@ def main():
         seed=432995820,
         keep_in_memory=True,
     )
-    dataset = dataset.flatten_indices()
+    dataset = dataset.flatten_indices(keep_in_memory=True)
 
     train_dataloader = torch.utils.data.DataLoader(
         dataset=dataset["train"],
@@ -126,7 +126,6 @@ def main():
         collate_fn=arc.dataset.ARCCollator(
             pad=tokenizer.special_tokens["<pad>"]
         ),
-        num_workers=16,
         pin_memory=True,
     )
     test_dataloader = torch.utils.data.DataLoader(
@@ -140,7 +139,7 @@ def main():
     )
     model = ARCEncoderLightning(arc.transformer.ARCEncoder(config))
     trainer = lightning.Trainer(
-        max_epochs=15,
+        max_epochs=10,
         callbacks=[create_checkpoint],
         default_root_dir=logs_path,
         accumulate_grad_batches=4,
