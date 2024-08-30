@@ -6,7 +6,7 @@ import torch.nn
 @dataclasses.dataclass
 class ARCEncoderConfig:
     num_token_ids: int
-    num_positions: int = 30 * 31 * 4 + 5
+    num_positions: int = 30 * 31 * 4 + 8  # 2 example of max size w/ run 1
     embedding_dim: int = 512
     num_heads: int = 8
     dim_feedforward: int = 2048
