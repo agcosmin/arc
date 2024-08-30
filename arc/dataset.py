@@ -133,12 +133,10 @@ class ARCCollator:
         sequences = [item["tokenized_sequence"] for item in items]
         max_seq_len = max([len(seq) for seq in sequences])
         input_ids = torch.full((len(sequences), max_seq_len), self.pad)
-        key_padding_mask = torch.zeros(
-            (len(sequences), max_seq_len), dtype=bool
-        )
+        key_padding_mask = torch.zeros((len(sequences), max_seq_len))
         for i, sequence in enumerate(sequences):
             input_ids[i, 0 : len(sequence)] = sequence
-            key_padding_mask[i, len(sequence) :] = True
+            key_padding_mask[i, len(sequence) :] = -torch.inf
 
         batch = {
             "problem": problems,

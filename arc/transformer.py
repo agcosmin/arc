@@ -87,7 +87,7 @@ class ARCEncoder(torch.nn.Module):
             embeddings,
             mask=torch.nn.Transformer.generate_square_subsequent_mask(
                 input_ids.shape[1], device=input_ids.device
-            ).to(bool),
+            ),
             src_key_padding_mask=padding_mask,
             is_causal=True,
         )
