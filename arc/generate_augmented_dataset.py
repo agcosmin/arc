@@ -21,7 +21,7 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max_sequence_length",
         type=int,
-        default=30 * 31 * 4 + 5,  # 2 example of max size w/ run 1
+        default=30 * 31 * 4 + 8,  # 2 example of max size w/ run 1
     )
     parser.add_argument("--num-samples", type=int, default=500)
     parser.add_argument("--max-num-samples", type=int, default=1000)

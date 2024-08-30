@@ -10,7 +10,9 @@ class ARCTokenizer:
 
         self.special_tokens = {
             token: value
-            for value, token in enumerate(("<pad>", "<in>", "<out>", "<rhs>"))
+            for value, token in enumerate(
+                ("<pad>", "<boi>", "<eoi>", "<boo>", "<eoo>", "<rhs>")
+            )
         }
         self.max_run_length = max_run_length
         self.num_token_ids = num_values * max_run_length + len(
@@ -23,9 +25,7 @@ class ARCTokenizer:
     ) -> None:
         """Tokenize based on the run length of the values. All values must be >= 0.
 
-        For each value there are self.max_run_length tokens. The first
-        self.max_run_length tokens ids are special and reserved tokens.
-        The value tokens ids start self.max_run_length.
+        For each value there are self.max_run_length tokens.
         """
 
         if input.dim() == 1:
@@ -67,28 +67,42 @@ class ARCTokenizer:
         self,
         input: list[torch.Tensor],
         max_run_length: int = -1,
-        add_solution_prompt: bool = True,
+        add_solution_prompt: bool = False,
     ) -> torch.Tensor:
         tokens = []
-        io_tokens = (
-            torch.tensor([self.special_tokens["<in>"]]),
-            torch.tensor([self.special_tokens["<out>"]]),
+        bounds_tokens = (
+            (
+                torch.tensor([self.special_tokens["<boi>"]]),
+                torch.tensor([self.special_tokens["<eoi>"]]),
+            ),
+            (
+                torch.tensor([self.special_tokens["<boo>"]]),
+                torch.tensor([self.special_tokens["<eoo>"]]),
+            ),
         )
         for i, tensor in enumerate(input):
-            tokens.append(io_tokens[i % len(io_tokens)])
+            prefix, suffix = bounds_tokens[i % 2]
+            tokens.append(prefix)
             tokens.append(self._rle_tokenize(tensor, max_run_length))
+            tokens.append(suffix)
 
         if add_solution_prompt:
-            tokens.append(torch.tensor(self.special_tokens["<out>"]))
+            tokens.append(bounds_tokens[1][0])
 
         tokens = torch.hstack(tokens)
         return tokens
 
     def decode(self, sequence: torch.Tensor) -> list[torch.Tensor]:
-        io_marks = (
+        bound_marks = (
             torch.logical_or(
-                sequence == self.special_tokens["<in>"],
-                sequence == self.special_tokens["<out>"],
+                torch.logical_or(
+                    sequence == self.special_tokens["<boi>"],
+                    sequence == self.special_tokens["<eoi>"],
+                ),
+                torch.logical_or(
+                    sequence == self.special_tokens["<boo>"],
+                    sequence == self.special_tokens["<eoo>"],
+                ),
             )
             .nonzero()
             .flatten()
@@ -99,29 +113,26 @@ class ARCTokenizer:
         values = torch.div(sequence, self.max_run_length, rounding_mode="trunc")
         runs = torch.remainder(sequence, self.max_run_length) + 1
 
-        if not io_marks:
-            io_marks = [-1]
-        io_marks.append(len(sequence))
         images = []
-        for begin, end in zip(io_marks[:-1], io_marks[1:]):
+        for i in range(0, len(bound_marks), 2):
+            begin, end = bound_marks[i] + 1, bound_marks[i + 1]
+            if begin == end:
+                continue
             rows = []
             row = []
             for value, run, rhs in zip(
-                values[begin + 1 : end],
-                runs[begin + 1 : end],
-                rhs_mask[begin + 1 : end],
+                values[begin:end],
+                runs[begin:end],
+                rhs_mask[begin:end],
             ):
                 if rhs:
                     rows.append(torch.hstack(row))
                     row = []
                 else:
                     row.append(torch.full((run,), value))
-            if row:
-                rows.append(torch.hstack(row))
-            if rows:
-                num_columns = max(len(row) for row in rows)
-                img = torch.full((len(rows), num_columns), 0)
-                for i, row in enumerate(rows):
-                    img[i, 0 : len(row)] = row
-                images.append(img)
+            num_columns = max(len(row) for row in rows)
+            img = torch.full((len(rows), num_columns), 0)
+            for i, row in enumerate(rows):
+                img[i, 0 : len(row)] = row
+            images.append(img)
         return images

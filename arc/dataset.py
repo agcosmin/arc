@@ -86,7 +86,7 @@ class ARCDataset(torch.utils.data.Dataset):
                     and len(sequence) > self.max_sequence_length
                 ):
                     in_pos = (
-                        (sequence == self.tokenizer.special_tokens["<in>"])
+                        (sequence == self.tokenizer.special_tokens["<boi>"])
                         .nonzero()
                         .flatten()
                     )

@@ -14,20 +14,16 @@ def test_tokenizer_constructor_raise_for_invalid_max_length():
 def test_rle_tokenization_returns_expected_tokens_for_single_element():
     tokenizer = arc.tokenizer.ARCTokenizer(max_run_length=3)
     tokens = tokenizer._rle_tokenize(torch.zeros((1,)))
-    assert torch.all(
-        tokens
-        == torch.tensor(
-            [len(tokenizer.special_tokens), tokenizer.special_tokens["<rhs>"]]
-        )
+    expected_tokens = torch.tensor(
+        [len(tokenizer.special_tokens), tokenizer.special_tokens["<rhs>"]]
     )
+    assert torch.all(tokens == expected_tokens)
 
     tokens = tokenizer._rle_tokenize(torch.zeros((1, 1)))
-    assert torch.all(
-        tokens
-        == torch.tensor(
-            [len(tokenizer.special_tokens), tokenizer.special_tokens["<rhs>"]]
-        )
+    expected_tokens == torch.tensor(
+        [len(tokenizer.special_tokens), tokenizer.special_tokens["<rhs>"]]
     )
+    assert torch.all(tokens == expected_tokens)
 
 
 def test_rle_tokenization_returns_expected_tokens_for_multiple_elements():
@@ -91,17 +87,19 @@ def test_rle_problem_encoding_returns_expected_tokens():
     num_special_tokens = len(tokenizer.special_tokens)
     expected_tokens = torch.tensor(
         [
-            tokenizer.special_tokens["<in>"],
+            tokenizer.special_tokens["<boi>"],
             num_special_tokens + max_run_length * 0 + 2,
             tokenizer.special_tokens["<rhs>"],
             num_special_tokens + max_run_length * 0 + 2,
             tokenizer.special_tokens["<rhs>"],
-            tokenizer.special_tokens["<out>"],
+            tokenizer.special_tokens["<eoi>"],
+            tokenizer.special_tokens["<boo>"],
             num_special_tokens + max_run_length * 1 + 1,
             tokenizer.special_tokens["<rhs>"],
             num_special_tokens + max_run_length * 1 + 1,
             tokenizer.special_tokens["<rhs>"],
-            tokenizer.special_tokens["<in>"],
+            tokenizer.special_tokens["<eoo>"],
+            tokenizer.special_tokens["<boi>"],
             num_special_tokens + max_run_length * 2 + 2,
             num_special_tokens + max_run_length * 2 + 0,
             tokenizer.special_tokens["<rhs>"],
@@ -110,7 +108,7 @@ def test_rle_problem_encoding_returns_expected_tokens():
             num_special_tokens + max_run_length * 2 + 0,
             num_special_tokens + max_run_length * 3 + 0,
             tokenizer.special_tokens["<rhs>"],
-            tokenizer.special_tokens["<out>"],
+            tokenizer.special_tokens["<eoi>"],
         ]
     )
 
@@ -126,12 +124,12 @@ def test_decode_encoded_sequence():
     sequence = [example1, solution1, example2, solution2]
     tokenizer = arc.tokenizer.ARCTokenizer(max_run_length=3)
 
-    tokenized_sequence = tokenizer.encode(sequence, add_solution_prompt=True)
+    tokenized_sequence = tokenizer.encode(sequence)
     decoded_sequence = tokenizer.decode(tokenized_sequence)
     for decoded, expected in zip(decoded_sequence, sequence):
         assert torch.all(decoded == expected)
 
-    tokenized_sequence = tokenizer.encode(sequence, add_solution_prompt=False)
+    tokenized_sequence = tokenizer.encode(sequence)
     decoded_sequence = tokenizer.decode(tokenized_sequence)
     for decoded, expected in zip(decoded_sequence, sequence):
         assert torch.all(decoded == expected)
