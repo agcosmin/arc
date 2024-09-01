@@ -110,7 +110,7 @@ class ARCDataset(torch.utils.data.Dataset):
             if pruned_tokenized_sequences:
                 item["tokenized_sequence"] = pruned_tokenized_sequences[i]
             if self.return_raw:
-                item["sequence"] = sequence[i]
+                item["sequence"] = sequences[i]
             items.append(item)
 
         return items

@@ -19,6 +19,22 @@ class ARCTokenizer:
             self.special_tokens
         )
 
+    def decode_token(
+        self, token: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if token.item() in self.special_tokens:
+            raise ValueError("Cannot decode special token")
+        token = token - len(self.special_tokens)
+        value = torch.div(token, self.max_run_length, rounding_mode="trunc")
+        run = torch.remainder(token, self.max_run_length) + 1
+        return value.item(), run.item()
+
+    def get_token_id(self, value: int, run: int) -> int:
+        token = (
+            value * self.max_run_length + (run - 1) + len(self.special_tokens)
+        )
+        return token
+
     @torch.no_grad
     def _rle_tokenize(
         self, input: torch.Tensor, max_run_length: int = -1
