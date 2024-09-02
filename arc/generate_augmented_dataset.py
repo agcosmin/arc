@@ -19,7 +19,7 @@ def create_argparser() -> argparse.ArgumentParser:
         "--solutions", type=str, default=None, help="Path to solutions."
     )
     parser.add_argument(
-        "--max_sequence_length",
+        "--max-sequence-length",
         type=int,
         default=30 * 31 * 4 + 8,  # 2 example of max size w/ run 1
     )
@@ -40,7 +40,7 @@ def create_argparser() -> argparse.ArgumentParser:
         "--rotate", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument(
-        "--limit-run", action=argparse.BooleanOptionalAction, default=True
+        "--limit-run", action=argparse.BooleanOptionalAction, default=False
     )
     parser.add_argument("--num-example-samples", type=int, default=-1)
     parser.add_argument("--max-run-length", type=int, default=30)
@@ -49,42 +49,42 @@ def create_argparser() -> argparse.ArgumentParser:
 
 def main():
     args = create_argparser().parse_args()
-    dataset = arc.dataset.ARCDataset(
-        [(args.challanges, args.solutions)],
-        max_sequence_length=args.max_sequence_length,
-        train=args.solutions is not None,
-        tokenizer=arc.tokenizer.ARCTokenizer(
-            max_run_length=args.max_run_length
-        ),
-        augment=arc.transform.Augment(
-            value_permutation=args.value_permutation,
-            fliplr=args.fliplr,
-            flipud=args.flipud,
-            rotate=args.rotate,
-            num_example_samples=args.num_example_samples,
-            limit_run=args.limit_run,
-        ),
-        return_raw=False,
+    augment = arc.transform.Augment(
+        value_permutation=args.value_permutation,
+        fliplr=args.fliplr,
+        flipud=args.flipud,
+        rotate=args.rotate,
+        num_example_samples=args.num_example_samples,
+        limit_run=args.limit_run,
     )
+    dataset = arc.dataset.ARCDataset([(args.challanges, args.solutions)])
+    tokenizer = arc.tokenizer.ARCTokenizer(max_run_length=args.max_run_length)
+
     for i in tqdm.tqdm(range(len(dataset))):
-        samples = {}
+        problem_id, problem = dataset[i]
+        sequences = {}
         num_samples = 0
-        problem = None
         while (
-            len(samples) < args.num_samples
+            len(sequences) < args.num_samples
             and num_samples < args.max_num_samples
         ):
-            for sample in dataset[i]:
-                sequence = sample["tokenized_sequence"]
-                samples[",".join(str(s) for s in sequence)] = sequence.tolist()
-                problem = sample["problem"]
+            for test in problem["test"]:
+                sequence, _, _ = arc.transform.sample_sequence(
+                    examples=problem["train"] + [test],
+                    augment=augment,
+                    tokenizer=tokenizer,
+                    max_length=args.max_sequence_length,
+                )
+                sequences[",".join(str(s) for s in sequence)] = (
+                    sequence.tolist()
+                )
 
         table = pyarrow.table(
-            [[problem] * len(samples), list(samples.values())],
+            [[problem_id] * len(sequences), list(sequences.values())],
             names=["problem", "tokenized_sequence"],
         )
         pyarrow.parquet.write_table(
-            table, os.path.join(args.output_path, f"{problem}.parquet")
+            table, os.path.join(args.output_path, f"{problem_id}.parquet")
         )
 
 

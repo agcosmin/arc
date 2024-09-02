@@ -1,7 +1,10 @@
 """ARC problem transform."""
 
+import bisect
 import dataclasses
 import typing
+import itertools
+import arc.tokenizer
 
 import torch
 
@@ -106,3 +109,57 @@ def generate_transform(
         run_limit = -1
 
     return transforms, run_limit
+
+
+def sample_sequence(
+    examples: list[dict[str, torch.Tensor]],
+    augment: Augment,
+    tokenizer: arc.tokenizer.ARCTokenizer,
+    max_length: int = -1,
+    test: typing.Union[dict[str, torch.Tensor], bool] = False,
+    return_img_sequence: bool = False,
+) -> torch.Tensor:
+    transforms, run_limit = generate_transform(
+        examples,
+        augment.value_permutation,
+        augment.fliplr,
+        augment.flipud,
+        augment.rotate,
+        augment.num_example_samples,
+        augment.limit_run,
+    )
+    examples = [transform(examples[i]) for i, transform in transforms]
+    sequence = list(
+        itertools.chain.from_iterable(
+            [[ex["input"], ex["output"]] for ex in examples]
+        )
+    )
+    expected_output = None
+    if isinstance(test, dict):
+        sequence.append(test["input"])
+        expected_output = test.get("output", None)
+    elif test:
+        *sequence, expected_output = sequence
+
+    token_sequence = tokenizer.encode(
+        sequence,
+        max_run_length=run_limit,
+        add_solution_prompt=bool(test),
+    )
+
+    if max_length > 0 and len(token_sequence) > max_length:
+        boi_pos = token_sequence == tokenizer.special_tokens["<boi>"]
+        boi_pos = boi_pos.nonzero().flatten()
+        lengths = (len(token_sequence) - boi_pos).flip(dims=(0,)).tolist()
+        cut_idx = bisect.bisect_right(lengths, max_length)
+        if cut_idx == 0:
+            raise RuntimeError("Could no find cut point.")
+        else:
+            cut_point = len(token_sequence) - lengths[cut_idx - 1]
+            token_sequence = token_sequence[cut_point:]
+
+    return (
+        token_sequence,
+        expected_output,
+        sequence if return_img_sequence else None,
+    )
