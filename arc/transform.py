@@ -39,7 +39,7 @@ def permute_values(
     input: torch.Tensor, value_permutation: list[int]
 ) -> torch.Tensor:
     output = torch.clone(input)
-    for from_value, to_value in enumerate(value_permutation):
+    for from_value, to_value in enumerate(value_permutation, 1):
         output[input == from_value] = to_value
 
     return output
@@ -116,9 +116,14 @@ def sample_sequence(
     augment: Augment,
     tokenizer: arc.tokenizer.ARCTokenizer,
     max_length: int = -1,
-    test: typing.Union[dict[str, torch.Tensor], bool] = False,
+    test: typing.Optional[dict[str, torch.Tensor]] = None,
+    generate_test: bool = False,
     return_img_sequence: bool = False,
-) -> torch.Tensor:
+) -> tuple[
+    torch.Tensor,
+    typing.Optional[dict[str, torch.Tensor]],
+    typing.Optional[list[torch.Tensor]],
+]:
     transforms, run_limit = generate_transform(
         examples,
         augment.value_permutation,
@@ -129,17 +134,15 @@ def sample_sequence(
         augment.limit_run,
     )
     examples = [transform(examples[i]) for i, transform in transforms]
+    if test is None and generate_test:
+        *examples, test = examples
     sequence = list(
         itertools.chain.from_iterable(
             [[ex["input"], ex["output"]] for ex in examples]
         )
     )
-    expected_output = None
-    if isinstance(test, dict):
+    if test:
         sequence.append(test["input"])
-        expected_output = test.get("output", None)
-    elif test:
-        *sequence, expected_output = sequence
 
     token_sequence = tokenizer.encode(
         sequence,
@@ -160,6 +163,6 @@ def sample_sequence(
 
     return (
         token_sequence,
-        expected_output,
+        test,
         sequence if return_img_sequence else None,
     )
