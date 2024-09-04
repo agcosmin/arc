@@ -35,7 +35,7 @@ class ARCDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.problems_ids)
 
-    def __getitem__(self, key: int) -> dict[str, dict[str, torch.Tensor]]:
+    def __getitem__(self, key: int) -> tuple[str, arc.transform.ARCProblem]:
         problem_id = self.problems_ids[key]
         return problem_id, arc.transform.problem_to_tensor(
             self.problems[problem_id]
