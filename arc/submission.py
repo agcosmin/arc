@@ -1,10 +1,19 @@
+import argparse
+import json
 import typing
 
 import torch
+import tqdm
 
-import arc.transformer
-import arc.tokenizer
-import arc.dataset
+ON_KAGGLE = False
+if ON_KAGGLE:
+    pass
+else:
+    import arc.transformer
+    import arc.tokenizer
+    import arc.dataset
+
+KAGGLE_ARGS = ["arc-agi_test-challenges.json", "submission.json", "model"]
 
 
 @torch.no_grad
@@ -88,65 +97,161 @@ def generate_solution(
     return solution
 
 
-def main():
-    tokenizer_max_run_length = 30
-    tokenizer = arc.tokenizer.ARCTokenizer(
-        max_run_length=tokenizer_max_run_length
+def solve_problem(
+    examples: list[dict[str, torch.Tensor]],
+    test: dict[str, torch.Tensor],
+    tokenizer: arc.tokenizer.ARCTokenizer,
+    model: arc.transformer.ARCEncoder,
+    num_samples: int = 500,
+    device: torch.device = torch.device("cpu"),
+) -> torch.Tensor:
+    augment = arc.transform.Augment(
+        value_permutation=True,
+        fliplr=True,
+        flipud=True,
+        rotate=True,
+        num_example_samples=10,
+        limit_run=False,
     )
-    dataset = arc.dataset.ARCDataset(
+    max_length = 30 * 31 * 3 + 7  # 1 example + 1 input of max size w/ run 1
+    shape_ratios = torch.vstack(
         [
-            (
-                "./data/arc-agi_training_challenges.json",
-                "./data/arc-agi_training_solutions.json",
+            torch.tensor(e["output"].shape) / torch.tensor(e["input"].shape)
+            for e in examples
+        ]
+    )
+    same_ratio = torch.all(shape_ratios == shape_ratios[0])
+    if same_ratio:
+        output_shape = (
+            (torch.tensor(test["input"].shape) * shape_ratios[0])
+            .to(torch.int)
+            .tolist()
+        )
+    else:
+        output_shape = None
+
+    solutions = []
+    for _ in range(num_samples):
+        context, *_ = arc.transform.sample_sequence(
+            examples=examples,
+            augment=augment,
+            tokenizer=tokenizer,
+            test=test,
+            max_length=max_length,
+        )
+        solution = tokenizer.decode(
+            generate_solution(
+                context=context,
+                model=model,
+                tokenizer=tokenizer,
+                shape=output_shape,
+                device=device,
             )
-        ],
-        train=False,
-        tokenizer=tokenizer,
-        augment=arc.transform.Augment(
-            value_permutation=True,
-            fliplr=True,
-            flipud=True,
-            rotate=True,
-            num_example_samples=20,
-            limit_run=False,
-        ),
-        return_raw=True,
+        )[0]
+        solutions.append(solution)
+
+    if output_shape is not None:
+        solution = torch.stack(solutions, dim=-1)
+    else:
+        shapes = torch.vstack([torch.tensor(t.shape) for t in solutions])
+        output_shape = shapes.median(dim=0).values
+        ends = torch.min(shapes, output_shape).tolist()
+        solution = torch.zeros(output_shape.tolist() + [len(solutions)], dtype=solution[0].dtype)
+        for i, img in enumerate(solutions):
+            end_row, end_col = ends[i]
+            solution[0:end_row, 0:end_col, i] = img[0:end_row, 0:end_col]
+
+    solution = torch.mode(solution, dim=-1).values
+    return solution
+
+
+def create_argparser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("challanges", type=str, help="Path to challanges.")
+    parser.add_argument("output", type=str)
+    parser.add_argument("model", type=str)
+    parser.add_argument("--num-samples", type=int, default=100)
+    parser.add_argument(
+        "--value-permutation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
-    config = arc.transformer.ARCEncoderConfig(
-        num_token_ids=tokenizer.num_token_ids,
-        embedding_dim=512,
-        num_heads=8,
-        dim_feedforward=2048,
-        num_layers=4,
-        tokenizer_max_run_length=tokenizer_max_run_length,
+    parser.add_argument(
+        "--fliplr", action=argparse.BooleanOptionalAction, default=True
     )
-    model = arc.transformer.ARCEncoder(config)
-    checkpoint_path = "./experiments/2024_08_30_23_26_55/checkpoints/last.ckpt"
+    parser.add_argument(
+        "--flipud", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--rotate", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--limit-run", action=argparse.BooleanOptionalAction, default=False
+    )
+    parser.add_argument("--num-example-samples", type=int, default=10)
+    return parser
+
+
+def main():
+    args = create_argparser().parse_args(KAGGLE_ARGS if ON_KAGGLE else None)
+    dataset = arc.dataset.ARCDataset([(args.challanges, None)])
+    checkpoint = torch.load(args.model)
+    encoder_config = checkpoint["hyper_parameters"]["config"]
+    tokenizer = arc.tokenizer.ARCTokenizer(
+        max_run_length=encoder_config.tokenizer_max_run_length
+    )
+    model = arc.transformer.ARCEncoder(encoder_config)
+    model.eval()
     model.load_state_dict(
         {
             k.replace("encoder.", "", 1): v
-            for k, v in torch.load(checkpoint_path, weights_only=True)[
-                "state_dict"
-            ].items()
+            for k, v in checkpoint["state_dict"].items()
+            if k != "lm_loss.weight"
         }
     )
-    device = torch.device("cuda")
+    device = (
+        torch.device("cuda")
+        if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
     model = model.to(device)
-    num_samples = 10
-    for problem_i in range(len(dataset)):
-        solutions = []
-        for sample in range(num_samples):
-            tests_solutions = []
-            for test in dataset[problem_i]:
-                solution = generate_solution(
-                    context=test["tokenized_sequence"],
-                    model=model,
+    augment = arc.transform.Augment(
+        value_permutation=args.value_permutation,
+        fliplr=args.fliplr,
+        flipud=args.flipud,
+        rotate=args.rotate,
+        num_example_samples=args.num_example_samples,
+        limit_run=args.limit_run,
+    )
+
+    solutions = {}
+    for problem_id, problem in tqdm.tqdm(dataset):
+        tests_solutions = []
+        for test in problem["test"]:
+            attempts = {}
+            for attempt in range(1, 3):
+                sequence, *_ = arc.transform.sample_sequence(
+                    examples=problem["train"],
+                    augment=augment,
                     tokenizer=tokenizer,
-                    shape=None,
+                    max_length=30 * 31 * 3 + 7,
+                    test=test,
+                    generate_test=False,
+                    return_img_sequence=False,
+                )
+                solution = solve_problem(
+                    examples=problem["train"],
+                    test=test,
+                    tokenizer=tokenizer,
+                    model=model,
+                    num_samples=args.num_samples,
                     device=device,
                 )
-                tests_solutions.append(tokenizer.decode(solution))
-            solutions.append(tests_solutions)
+                attempts[f"attempt_{attempt}"] = solution.tolist()
+            tests_solutions.append(attempts)
+        solutions[problem_id] = tests_solutions
+    with open(args.output, "w") as submission_file:
+        json.dump(solutions, submission_file)
 
 
 if __name__ == "__main__":
