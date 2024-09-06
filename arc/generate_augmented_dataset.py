@@ -42,7 +42,7 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--limit-run", action=argparse.BooleanOptionalAction, default=False
     )
-    parser.add_argument("--num-example-samples", type=int, default=-1)
+    parser.add_argument("--num-example-samples", type=int, default=10)
     parser.add_argument("--max-run-length", type=int, default=30)
     return parser
 
