@@ -156,7 +156,9 @@ def solve_problem(
         shapes = torch.vstack([torch.tensor(t.shape) for t in solutions])
         output_shape = shapes.median(dim=0).values
         ends = torch.min(shapes, output_shape).tolist()
-        solution = torch.zeros(output_shape.tolist() + [len(solutions)], dtype=solution[0].dtype)
+        solution = torch.zeros(
+            output_shape.tolist() + [len(solutions)], dtype=solution[0].dtype
+        )
         for i, img in enumerate(solutions):
             end_row, end_col = ends[i]
             solution[0:end_row, 0:end_col, i] = img[0:end_row, 0:end_col]
@@ -189,12 +191,15 @@ def create_argparser() -> argparse.ArgumentParser:
         "--limit-run", action=argparse.BooleanOptionalAction, default=False
     )
     parser.add_argument("--num-example-samples", type=int, default=10)
+    parser.add_argument(
+        "--solutions", type=str, default=None, help="Path to solutions."
+    )
     return parser
 
 
 def main():
     args = create_argparser().parse_args(KAGGLE_ARGS if ON_KAGGLE else None)
-    dataset = arc.dataset.ARCDataset([(args.challanges, None)])
+    dataset = arc.dataset.ARCDataset([(args.challanges, args.solutions)])
     checkpoint = torch.load(args.model)
     encoder_config = checkpoint["hyper_parameters"]["config"]
     tokenizer = arc.tokenizer.ARCTokenizer(
@@ -225,7 +230,7 @@ def main():
     )
 
     solutions = {}
-    for problem_id, problem in tqdm.tqdm(dataset):
+    for problem_id, problem in tqdm.tqdm(dataset, "Solve"):
         tests_solutions = []
         for test in problem["test"]:
             attempts = {}
@@ -252,6 +257,28 @@ def main():
         solutions[problem_id] = tests_solutions
     with open(args.output, "w") as submission_file:
         json.dump(solutions, submission_file)
+
+    if args.solutions:
+        scores = {}
+        for problem_id, problem in tqdm.tqdm(dataset, "Score"):
+            scores[problem_id] = []
+            for t, test in enumerate(problem["test"]):
+                solution = solutions[problem_id][t]
+                expected = test["output"].tolist()
+                scores[problem_id].append(
+                    expected == solution["attempt_1"]
+                    or expected == solution["attempt_2"]
+                )
+        max_score = sum(len(s) for s in scores.values())
+        per_problem_scores = {p: sum(s) for p, s in scores.items()}
+        total_score = sum(s for s in per_problem_scores.values())
+        print(
+            json.dumps(
+                {p: s for p, s in per_problem_scores.items() if s != 0},
+                indent=4,
+            )
+        )
+        print(f"{total_score=}/{max_score=}")
 
 
 if __name__ == "__main__":
