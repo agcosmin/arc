@@ -86,13 +86,14 @@ class ARCEncoderLightning(lightning.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, self.num_epochs, eta_min=0, last_epoch=-1
-            ),
-            "name": "lr",
-        }
-        return [optimizer], [lr_scheduler]
+        #lr_scheduler = {
+        #    "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+        #        optimizer, self.num_epochs, eta_min=0, last_epoch=-1
+        #    ),
+        #    "name": "lr",
+        #}
+        #return [optimizer], [lr_scheduler]
+        return optimizer
 
 
 def main():
@@ -121,7 +122,7 @@ def main():
         save_top_k=5,
         mode="max",
         auto_insert_metric_name=False,
-        every_n_train_steps=10_000,
+        save_on_train_epoch_end=True,
         enable_version_counter=True,
     )
 
@@ -184,8 +185,7 @@ def main():
             ),
         ],
         default_root_dir=logs_path,
-        accumulate_grad_batches=4,
-        gradient_clip_val=1.0,
+        accumulate_grad_batches=8,
     )
     trainer.fit(model=model, train_dataloaders=train_dataloader)
     trainer.test(model=model, dataloaders=train_dataloader)
