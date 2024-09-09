@@ -89,11 +89,12 @@ def generate_transform(
     else:
         samples = torch.arange(len(examples))
 
+    value_perm = torch.randperm(9) + 1 if value_permutation else None
     transforms = [
         (
             sample,
             Transform(
-                torch.randperm(9) + 1 if value_permutation else None,
+                value_perm,
                 fliplr and bool(torch.randint(0, 2, (1,))),
                 flipud and bool(torch.randint(0, 2, (1,))),
                 int(rotate) * torch.randint(0, 4, (1,)).item(),
