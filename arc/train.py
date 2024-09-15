@@ -86,13 +86,13 @@ class ARCEncoderLightning(lightning.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        #lr_scheduler = {
+        # lr_scheduler = {
         #    "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
         #        optimizer, self.num_epochs, eta_min=0, last_epoch=-1
         #    ),
         #    "name": "lr",
-        #}
-        #return [optimizer], [lr_scheduler]
+        # }
+        # return [optimizer], [lr_scheduler]
         return optimizer
 
 
